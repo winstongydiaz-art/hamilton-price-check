@@ -83,7 +83,7 @@ header{position:sticky;top:0;z-index:20;background:var(--brand);color:#fff;paddi
 
   <section id="tab-brands" hidden>
     <h2 class="text-2xl font-extrabold mb-1">Choose your products</h2>
-    <p class="text-sm mb-3" style="color:var(--muted)">Pick what you need. The lowest price is shown; the cart tells you where to buy it. Demo prices for now.</p>
+    <p class="text-sm mb-3" style="color:var(--muted)">Pick what you need. The lowest price is shown; the cart tells you where to buy it. <span id="demoTag">Demo prices for now.</span></p>
     <input id="search" class="field mb-3" type="search" placeholder="Search products" aria-label="Search products">
     <div id="chips" class="flex gap-2 overflow-x-auto pb-2 mb-3"></div>
     <div id="grid" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
@@ -247,7 +247,7 @@ function renderPlan(){
     <div class="grid gap-2">${stops.map(s=>`<div class="card p-3">${badge(s.store)}
       <ul class="text-sm my-2">${s.items.map(i=>`<li class="flex justify-between gap-2 py-0.5"><span>${i.qty} × ${esc(i.name)}</span><span>${money(i.cost)}</span></li>`).join("")}</ul>
       <div class="font-bold flex justify-between"><span>Subtotal</span><span>${money(s.subtotal)}</span></div></div>`).join("")}</div>
-    ${miss}<p class="text-xs mt-2" style="color:var(--muted)">Demo prices until live sync is connected.</p>`;
+    ${o.unavailable&&o.unavailable.length?`<p class="text-sm mt-2" style="color:#D6202F">Not sold here: ${o.unavailable.map(esc).join(", ")}</p>`:""}${miss}${d.demo?`<p class="text-xs mt-2" style="color:var(--muted)">Demo prices until live sync is connected.</p>`:""}`;
 }
 $("#result").onclick=e=>{const b=e.target.closest("[data-pt]");if(b){planTab=+b.dataset.pt;renderPlan()}};
 
@@ -333,7 +333,7 @@ $("#scanBtn").onclick=async()=>{
 /* Sync + init */
 async function loadData(){
   try{
-    [stores,products]=await Promise.all([api("/api/stores"),api("/api/products")]);
+    let st;[stores,products,st]=await Promise.all([api("/api/stores"),api("/api/products"),api("/api/status").catch(()=>({source:"demo"}))]);$("#demoTag").hidden=st.source!=="demo";
     my=store.get("my",null);my=my?my.filter(id=>stores.some(s=>s.id===id)):stores.map(s=>s.id);
     $("#names").innerHTML=products.map(p=>`<option value="${esc(p.name)}">`).join("");
     renderStores();renderGrid();
