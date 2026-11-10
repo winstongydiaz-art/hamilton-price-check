@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B6B58">
+<title>Hamilton Price Check</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+:root{--bg:#EDF2F0;--ink:#0F2A23;--muted:#5B7169;--line:#D2DDD9;--card:#fff;--brand:#0B6B58;--pns:#F5C400;--ww:#2F8F3A;--nw:#D6202F}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,sans-serif}
+h1,h2,h3,.disp{font-family:'Bricolage Grotesque','DM Sans',sans-serif}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--brand);outline-offset:2px}
+.field{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:.6rem .75rem;background:#fff;font:inherit}
+.btn{background:var(--brand);color:#fff;border:0;border-radius:10px;padding:.6rem 1rem;font-weight:700}
+.btn.ghost{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
+.tab{flex:1;padding:.7rem .25rem;font-weight:700;font-size:.85rem;border-bottom:3px solid transparent;color:var(--muted);background:none;border-top:0;border-left:0;border-right:0}
+.tab[aria-selected=true]{color:var(--brand);border-bottom-color:var(--brand)}
+.badge{display:inline-block;border-radius:6px;padding:.1rem .45rem;font-size:.72rem;font-weight:700}
+.b-pns{background:var(--pns);color:#111}.b-ww{background:var(--ww);color:#fff}.b-nw{background:var(--nw);color:#fff}
+.chip{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:.3rem .8rem;font-size:.85rem;white-space:nowrap}
+.chip[aria-pressed=true]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.card{background:var(--card);border:1.5px solid var(--line);border-radius:14px}
+.tile{aspect-ratio:4/3;display:grid;place-items:center;background:#DCE8E4;border-radius:12px 12px 0 0;font-size:2.2rem;font-weight:800;color:var(--brand);overflow:hidden}
+.tile img{width:100%;height:100%;object-fit:cover}
+#drawer{position:fixed;inset:0 0 0 auto;width:min(100%,24rem);background:#fff;transform:translateX(100%);transition:transform .25s;z-index:40;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+#drawer.open{transform:none}
+#veil{position:fixed;inset:0;background:rgba(15,42,35,.45);z-index:30;display:none}
+#veil.open{display:block}
+header{position:sticky;top:0;z-index:20;background:var(--brand);color:#fff;padding-top:env(safe-area-inset-top)}
+@media (prefers-reduced-motion:reduce){#drawer{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="flex items-center justify-between gap-2 px-4 py-3">
+    <h1 class="text-xl font-extrabold m-0">Hamilton Price Check</h1>
+    <div class="flex gap-2">
+      <button id="syncBtn" class="btn ghost" style="padding:.45rem .7rem">Sync prices</button>
+      <button id="cartBtn" class="btn" style="background:#fff;color:var(--brand);padding:.45rem .7rem">Cart (<span id="cartCount">0</span>)</button>
+    </div>
+  </div>
+  <nav class="flex bg-white" role="tablist" aria-label="Modes">
+    <button class="tab" role="tab" data-tab="list" aria-selected="true">Make a list</button>
+    <button class="tab" role="tab" data-tab="brands" aria-selected="false">Brands</button>
+    <button class="tab" role="tab" data-tab="scan" aria-selected="false">Compare</button>
+    <button class="tab" role="tab" data-tab="favs" aria-selected="false">Favourites</button>
+  </nav>
+</header>
+
+<main class="max-w-3xl mx-auto p-4 pb-24">
+
+  <!-- OPTION 1 -->
+  <section id="tab-list">
+    <h2 class="text-2xl font-extrabold mb-1">Make your own list</h2>
+    <p class="text-sm mb-4" style="color:var(--muted)">Add items one by one, then compare prices from the cart.</p>
+    <form id="itemForm" class="card p-4 grid gap-3">
+      <label>Product<input id="fName" class="field" required placeholder="e.g. Anchor Milk 2L"></label>
+      <div class="grid grid-cols-2 gap-3">
+        <label>Quantity<input id="fQty" class="field" type="number" min="1" value="1"></label>
+        <label>Format
+          <select id="fFormat" class="field"><option>Individual</option><option>Pack</option><option>Bulk Tray</option></select>
+        </label>
+      </div>
+      <label>Notes<input id="fNotes" class="field" placeholder="Brand, size, anything else"></label>
+      <button class="btn" type="submit">Add to cart</button>
+    </form>
+  </section>
+
+  <!-- OPTION 2 -->
+  <section id="tab-brands" hidden>
+    <h2 class="text-2xl font-extrabold mb-3">Choose your favourite brand</h2>
+    <input id="search" class="field mb-3" type="search" placeholder="Search products" aria-label="Search products">
+    <div id="chips" class="flex gap-2 overflow-x-auto pb-2 mb-3"></div>
+    <div id="grid" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
+    <p id="gridMsg" class="text-sm mt-3" style="color:var(--muted)"></p>
+  </section>
+
+  <!-- OPTION 3 -->
+  <section id="tab-scan" hidden>
+    <h2 class="text-2xl font-extrabold mb-1">Compare your price</h2>
+    <p class="text-sm mb-3" style="color:var(--muted)">Scan a barcode or search by name.</p>
+    <label class="block mb-3">I'm shopping at
+      <select id="here" class="field"><option>Pak'nSave</option><option>Woolworths</option><option>New World</option></select>
+    </label>
+    <div id="reader" class="mb-3" style="width:100%"></div>
+    <div class="flex gap-2 mb-3">
+      <button id="scanBtn" class="btn">Start scanner</button>
+      <form id="qForm" class="flex gap-2 flex-1">
+        <input id="qInput" class="field" placeholder="Name or barcode" aria-label="Name or barcode">
+        <button class="btn ghost" type="submit">Search</button>
+      </form>
+    </div>
+    <div id="scanOut"></div>
+  </section>
+
+  <!-- FAVOURITES -->
+  <section id="tab-favs" hidden>
+    <h2 class="text-2xl font-extrabold mb-3">Saved weekly lists</h2>
+    <div id="favList" class="grid gap-3"></div>
+  </section>
+</main>
+
+<div id="veil"></div>
+<aside id="drawer" aria-label="Cart" aria-hidden="true">
+  <div class="flex items-center justify-between p-4 border-b" style="border-color:var(--line)">
+    <h2 class="text-xl font-extrabold m-0">Your cart</h2>
+    <button id="closeCart" class="btn ghost" style="padding:.35rem .7rem">Close</button>
+  </div>
+  <div id="cartItems" class="flex-1 overflow-y-auto p-4 grid gap-3 content-start"></div>
+  <div class="p-4 grid gap-2 border-t" style="border-color:var(--line)">
+    <div class="flex gap-2">
+      <input id="listName" class="field" placeholder="List name" aria-label="List name">
+      <button id="saveList" class="btn ghost">Save list</button>
+    </div>
+    <button id="compareBtn" class="btn">Compare prices</button>
+    <div id="result"></div>
+  </div>
+</aside>
+<div id="toast" role="status" class="fixed left-1/2 bottom-6 -translate-x-1/2 text-white px-4 py-2 rounded-lg text-sm" style="background:var(--ink);display:none;z-index:50"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const SC = {"Pak'nSave":"pns","Woolworths":"ww","New World":"nw"};
+const CHIPS = ["All","Anchor","Pams","Milk","Eggs","Vogel's","Whittaker's"];
+let products = [], cart = [], chip = "All", scanner = null;
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money = n => "$" + Number(n).toFixed(2);
+const badge = s => `<span class="badge b-${SC[s] || "pns"}">${esc(s)}</span>`;
+const store = {
+  get(k, d){ try { return JSON.parse(localStorage.getItem(k)) ?? d } catch { return d } },
+  set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)) } catch {} }
+};
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.style.display="block"; clearTimeout(toast.t); toast.t=setTimeout(()=>t.style.display="none",2200); }
+async function api(path, opts){
+  const r = await fetch(path, opts);
+  if(!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+
+/* ---------- Tabs ---------- */
+document.querySelectorAll(".tab").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", t === b));
+  ["list","brands","scan","favs"].forEach(n => $("#tab-"+n).hidden = n !== b.dataset.tab);
+  if(b.dataset.tab !== "scan") stopScan();
+  if(b.dataset.tab === "favs") renderFavs();
+});
+
+/* ---------- Cart ---------- */
+function addToCart(it){
+  const k = cart.find(c => c.name === it.name && c.format === it.format && c.notes === it.notes);
+  k ? k.qty += it.qty : cart.push(it);
+  persist(); toast("Added: " + it.name);
+}
+function persist(){ store.set("cart", cart); renderCart(); }
+function renderCart(){
+  $("#cartCount").textContent = cart.reduce((a,c) => a + c.qty, 0);
+  $("#cartItems").innerHTML = cart.length ? cart.map((c,i) => `
+    <div class="card p-3">
+      <div class="font-bold">${esc(c.name)}</div>
+      <div class="text-sm" style="color:var(--muted)">${esc(c.format)}${c.notes ? " · " + esc(c.notes) : ""}</div>
+      <div class="flex items-center gap-2 mt-2">
+        <button class="btn ghost" data-act="dec" data-i="${i}" aria-label="Decrease quantity">−</button>
+        <span class="font-bold w-6 text-center">${c.qty}</span>
+        <button class="btn ghost" data-act="inc" data-i="${i}" aria-label="Increase quantity">+</button>
+        <button class="btn ghost ml-auto" data-act="del" data-i="${i}">Remove</button>
+      </div>
+    </div>`).join("") : `<p style="color:var(--muted)">Your cart is empty. Add items from any mode.</p>`;
+}
+$("#cartItems").onclick = e => {
+  const b = e.target.closest("button"); if(!b) return;
+  const i = +b.dataset.i, c = cart[i];
+  if(b.dataset.act === "inc") c.qty++;
+  if(b.dataset.act === "dec") c.qty = Math.max(1, c.qty - 1);
+  if(b.dataset.act === "del") cart.splice(i, 1);
+  persist();
+};
+const openCart = o => { $("#drawer").classList.toggle("open", o); $("#veil").classList.toggle("open", o); $("#drawer").setAttribute("aria-hidden", !o); };
+$("#cartBtn").onclick = () => openCart(true);
+$("#closeCart").onclick = $("#veil").onclick = () => openCart(false);
+
+$("#itemForm").onsubmit = e => {
+  e.preventDefault();
+  addToCart({ name: $("#fName").value.trim(), qty: Math.max(1, +$("#fQty").value || 1), format: $("#fFormat").value, notes: $("#fNotes").value.trim() });
+  e.target.reset(); $("#fQty").value = 1;
+};
+
+/* ---------- Compare (2 savings options) ---------- */
+$("#compareBtn").onclick = async () => {
+  const out = $("#result");
+  if(!cart.length){ out.innerHTML = `<p class="text-sm">Add items first.</p>`; return; }
+  out.innerHTML = `<p class="text-sm">Comparing…</p>`;
+  try {
+    const d = await api("/api/compare", { method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(cart.map(c => ({ name:c.name, quantity:c.qty, format:c.format, notes:c.notes }))) });
+    const o1 = d.option1_max_savings, o2 = d.option2_single_store;
+    out.innerHTML = `
+      <div class="card p-3 mb-2"><div class="font-bold">Option 1: Maximum savings</div>
+        <ul class="text-sm my-2">${o1.plan.map(p => `<li>${esc(p.item)} ${badge(p.store)} ${money(p.cost)}</li>`).join("")}</ul>
+        <div class="font-bold">Total ${money(o1.total)}</div></div>
+      <div class="card p-3"><div class="font-bold">Option 2: Single store</div>
+        <div class="my-2">${badge(o2.store)}</div>
+        <div class="font-bold">Total ${money(o2.total)}</div></div>`;
+  } catch { out.innerHTML = `<p class="text-sm" style="color:var(--nw)">Could not reach the price service. Try again.</p>`; }
+};
+
+/* ---------- Favourites ---------- */
+$("#saveList").onclick = () => {
+  const n = $("#listName").value.trim();
+  if(!n || !cart.length){ toast("Add items and a list name first"); return; }
+  const l = store.get("lists", {}); l[n] = cart; store.set("lists", l); toast("Saved: " + n); $("#listName").value = "";
+};
+function renderFavs(){
+  const l = store.get("lists", {}), keys = Object.keys(l);
+  $("#favList").innerHTML = keys.length ? keys.map(k => `
+    <div class="card p-3 flex items-center gap-2">
+      <div class="flex-1"><div class="font-bold">${esc(k)}</div><div class="text-sm" style="color:var(--muted)">${l[k].length} items</div></div>
+      <button class="btn" data-load="${esc(k)}">Load</button>
+      <button class="btn ghost" data-del="${esc(k)}">Delete</button>
+    </div>`).join("") : `<p style="color:var(--muted)">No saved lists yet. Save one from the cart.</p>`;
+}
+$("#favList").onclick = e => {
+  const b = e.target.closest("button"); if(!b) return;
+  const l = store.get("lists", {});
+  if(b.dataset.load){ cart = l[b.dataset.load] || []; persist(); openCart(true); }
+  if(b.dataset.del){ delete l[b.dataset.del]; store.set("lists", l); renderFavs(); }
+};
+
+/* ---------- Brand gallery ---------- */
+function cheapest(p){ const s = Object.keys(p.prices).sort((a,b) => p.prices[a]-p.prices[b])[0]; return [s, p.prices[s]]; }
+function renderGrid(){
+  const q = $("#search").value.trim().toLowerCase();
+  const list = products.filter(p => {
+    const hay = (p.name + " " + p.category).toLowerCase();
+    return (!q || hay.includes(q)) && (chip === "All" || hay.includes(chip.toLowerCase()));
+  });
+  $("#grid").innerHTML = list.map(p => { const [s, v] = cheapest(p); return `
+    <div class="card overflow-hidden">
+      <div class="tile">${p.image ? `<img src="${esc(p.image)}" alt="" loading="lazy">` : esc(p.name[0])}</div>
+      <div class="p-3">
+        <div class="font-bold text-sm leading-tight">${esc(p.name)}</div>
+        <div class="flex items-center justify-between mt-2"><span class="disp font-extrabold text-lg">${money(v)}</span>${badge(s)}</div>
+        <button class="btn w-full mt-2" data-add="${esc(p.name)}">+ Add</button>
+      </div></div>`; }).join("");
+  $("#gridMsg").textContent = list.length ? "" : (products.length ? "No products match. Try another search." : "");
+}
+$("#search").oninput = renderGrid;
+$("#chips").innerHTML = CHIPS.map(c => `<button class="chip" aria-pressed="${c==="All"}" data-chip="${esc(c)}">${esc(c)}</button>`).join("");
+$("#chips").onclick = e => {
+  const b = e.target.closest("button"); if(!b) return;
+  chip = b.dataset.chip;
+  document.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", c === b));
+  renderGrid();
+};
+$("#grid").onclick = e => {
+  const b = e.target.closest("[data-add]"); if(!b) return;
+  addToCart({ name: b.dataset.add, qty: 1, format: "Individual", notes: "" });
+};
+async function loadProducts(){
+  try { products = await api("/api/products"); renderGrid(); }
+  catch { $("#gridMsg").textContent = "Could not load products. Check your connection and try again."; }
+}
+
+/* ---------- Scanner + instant search ---------- */
+function showProduct(p){
+  const here = $("#here").value, names = Object.keys(p.prices).sort((a,b) => p.prices[a]-p.prices[b]);
+  const best = names[0], diff = (p.prices[here] ?? 0) - p.prices[best];
+  const verdict = best === here ? `<p class="font-bold" style="color:var(--ww)">${esc(here)} is already the cheapest in Hamilton.</p>`
+    : diff > 0 ? `<p class="font-bold" style="color:var(--nw)">Cheaper at ${esc(best)}: save ${money(diff)}.</p>` : "";
+  return `<div class="card p-3 mb-3"><div class="font-bold text-lg">${esc(p.name)}</div>${verdict}
+    <ul class="my-2">${names.map(n => `<li class="flex justify-between py-1">${badge(n)}<span class="font-bold">${money(p.prices[n])}</span></li>`).join("")}</ul>
+    <button class="btn" data-add="${esc(p.name)}">Add to cart</button></div>`;
+}
+async function lookup(term){
+  const out = $("#scanOut"); out.innerHTML = `<p>Searching…</p>`;
+  try {
+    if(/^\d{8,14}$/.test(term)){
+      const p = await api("/api/barcode/" + encodeURIComponent(term));
+      out.innerHTML = p.error ? `<p>No product found for barcode ${esc(term)}. Try searching by name.</p>` : showProduct(p);
+    } else {
+      const r = await api("/api/products?q=" + encodeURIComponent(term));
+      out.innerHTML = r.length ? r.map(showProduct).join("") : `<p>No products found for “${esc(term)}”.</p>`;
+    }
+  } catch { out.innerHTML = `<p style="color:var(--nw)">Could not reach the price service. Try again.</p>`; }
+}
+$("#scanOut").onclick = e => { const b = e.target.closest("[data-add]"); if(b) addToCart({ name:b.dataset.add, qty:1, format:"Individual", notes:"" }); };
+$("#qForm").onsubmit = e => { e.preventDefault(); const t = $("#qInput").value.trim(); if(t) lookup(t); };
+async function stopScan(){
+  if(scanner){ try { await scanner.stop(); } catch {} scanner = null; }
+  $("#scanBtn").textContent = "Start scanner";
+}
+$("#scanBtn").onclick = async () => {
+  if(scanner){ stopScan(); return; }
+  try {
+    scanner = new Html5Qrcode("reader");
+    await scanner.start({ facingMode:"environment" }, { fps:10, qrbox:{ width:250, height:150 } }, code => { stopScan(); lookup(code); });
+    $("#scanBtn").textContent = "Stop scanner";
+  } catch { scanner = null; toast("Camera unavailable. Allow camera access or search by name."); }
+};
+
+/* ---------- Live price sync ---------- */
+$("#syncBtn").onclick = async () => {
+  const b = $("#syncBtn"); b.disabled = true; b.textContent = "Syncing…";
+  try { await api("/api/sync", { method:"POST" }); await loadProducts(); toast("Prices updated"); }
+  catch { toast("Sync failed. Try again soon."); }
+  b.disabled = false; b.textContent = "Sync prices";
+};
+
+/* ---------- Init ---------- */
+cart = store.get("cart", []);
+renderCart(); loadProducts();
+if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+</script>
+</body>
+</html>
